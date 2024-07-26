@@ -1,13 +1,69 @@
 const canvas = document.getElementById('imageCanvas');
 const ctx = canvas.getContext('2d');
 const uploadBtn = document.getElementById('upload-btn');
+const dropArea = document.getElementById('drop-area');
+const imageList = document.getElementById('image-list');
+const textInput = document.getElementById('text-input');
+const addTextButton = document.getElementById('add-text');
 
 let isDragging = false;
 let startX, startY;
-let draggedImage = null;
-const images = [];
+let draggedItem = null;
+const items = [];
+const itemMap = new Map();
 
-uploadBtn.addEventListener('change', (e) => {
+uploadBtn.addEventListener('change', handleFiles);
+dropArea.addEventListener('dragover', (e) => e.preventDefault());
+dropArea.addEventListener('drop', handleDrop);
+dropArea.addEventListener('click', () => uploadBtn.click());
+
+canvas.addEventListener('mousedown', (e) => {
+  const mousePos = getMousePos(canvas, e);
+  draggedItem = getItemAtPosition(mousePos);
+  if (draggedItem) {
+    isDragging = true;
+    startX = mousePos.x - draggedItem.x;
+    startY = mousePos.y - draggedItem.y;
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (isDragging && draggedItem) {
+    const mousePos = getMousePos(canvas, e);
+    draggedItem.x = mousePos.x - startX;
+    draggedItem.y = mousePos.y - startY;
+    draw();
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  isDragging = false;
+  draggedItem = null;
+});
+
+canvas.addEventListener('mouseout', () => {
+  isDragging = false;
+  draggedItem = null;
+});
+
+addTextButton.addEventListener('click', () => {
+  const text = textInput.value;
+  if (text) {
+    const id = generateUniqueId();
+    const textObj = {
+      type: 'text',
+      text: text,
+      x: 50,
+      y: 50,
+      id: id
+    };
+    items.push(textObj);
+    itemMap.set(id, textObj);
+    draw();
+  }
+});
+
+function handleFiles(e) {
   const files = e.target.files;
   for (const file of files) {
     const reader = new FileReader();
@@ -15,49 +71,42 @@ uploadBtn.addEventListener('change', (e) => {
       const img = new Image();
       img.src = event.target.result;
       img.onload = () => {
+        const id = generateUniqueId();
         const imgObj = {
+          type: 'image',
           image: img,
-          x: 50,
-          y: 50,
+          id: id,
+          x: 0,
+          y: 0,
           width: img.width,
           height: img.height
         };
-        images.push(imgObj);
-        draw();
+        itemMap.set(id, imgObj);
+        addImageToList(imgObj);
       };
     };
     reader.readAsDataURL(file);
   }
-});
+}
 
-canvas.addEventListener('mousedown', (e) => {
-  const mousePos = getMousePos(canvas, e);
-  draggedImage = getImageAtPosition(mousePos);
-  if (draggedImage) {
-    isDragging = true;
-    startX = mousePos.x - draggedImage.x;
-    startY = mousePos.y - draggedImage.y;
-  }
-});
+function handleDrop(e) {
+  e.preventDefault();
+  const files = e.dataTransfer.files;
+  handleFiles({ target: { files } });
+}
 
-canvas.addEventListener('mousemove', (e) => {
-  if (isDragging && draggedImage) {
-    const mousePos = getMousePos(canvas, e);
-    draggedImage.x = mousePos.x - startX;
-    draggedImage.y = mousePos.y - startY;
-    draw();
-  }
-});
+function addImageToList(imgObj) {
+  const imgItem = document.createElement('div');
+  imgItem.className = 'image-item';
+  imgItem.innerHTML = `<img src="${imgObj.image.src}" width="100%" height="100%">`;
+  imgItem.draggable = true;
 
-canvas.addEventListener('mouseup', () => {
-  isDragging = false;
-  draggedImage = null;
-});
+  imgItem.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', imgObj.id);
+  });
 
-canvas.addEventListener('mouseout', () => {
-  isDragging = false;
-  draggedImage = null;
-});
+  imageList.appendChild(imgItem);
+}
 
 function getMousePos(canvas, event) {
   const rect = canvas.getBoundingClientRect();
@@ -67,12 +116,21 @@ function getMousePos(canvas, event) {
   };
 }
 
-function getImageAtPosition(pos) {
-  for (let i = images.length - 1; i >= 0; i--) {
-    const img = images[i];
-    if (pos.x > img.x && pos.x < img.x + img.width &&
-        pos.y > img.y && pos.y < img.y + img.height) {
-      return img;
+function getItemAtPosition(pos) {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.type === 'image') {
+      if (pos.x > item.x && pos.x < item.x + item.width &&
+          pos.y > item.y && pos.y < item.y + item.height) {
+        return item;
+      }
+    } else if (item.type === 'text') {
+      const textWidth = ctx.measureText(item.text).width;
+      const textHeight = 16; // approximate text height
+      if (pos.x > item.x && pos.x < item.x + textWidth &&
+          pos.y > item.y && pos.y < item.y + textHeight) {
+        return item;
+      }
     }
   }
   return null;
@@ -80,7 +138,32 @@ function getImageAtPosition(pos) {
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  images.forEach(img => {
-    ctx.drawImage(img.image, img.x, img.y);
+  items.forEach(item => {
+    if (item.type === 'image') {
+      ctx.drawImage(item.image, item.x, item.y, item.width, item.height);
+    } else if (item.type === 'text') {
+      ctx.fillText(item.text, item.x, item.y);
+    }
   });
+}
+
+canvas.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+
+canvas.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const id = e.dataTransfer.getData('text/plain');
+  const itemObj = itemMap.get(id);
+  if (itemObj) {
+    itemObj.x = e.offsetX;
+    itemObj.y = e.offsetY;
+    items.push(itemObj);
+    draw();
+    itemMap.delete(id); 
+  }
+});
+
+function generateUniqueId() {
+  return '_' + Math.random().toString(36).substring(2, 9);
 }
