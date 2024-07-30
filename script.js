@@ -78,8 +78,8 @@ function handleFiles(e) {
           id: id,
           x: 0,
           y: 0,
-          width: img.width,
-          height: img.height
+          width: img.width > 100 ? 100 : img.width,
+          height: img.height > 100 ? 100 : img.height
         };
         itemMap.set(id, imgObj);
         addImageToList(imgObj);
@@ -98,7 +98,7 @@ function handleDrop(e) {
 function addImageToList(imgObj) {
   const imgItem = document.createElement('div');
   imgItem.className = 'image-item';
-  imgItem.innerHTML = `<img src="${imgObj.image.src}" width="100%" height="100%">`;
+  imgItem.innerHTML = `<img src="${imgObj.image.src}" class="small-image">`;
   imgItem.draggable = true;
 
   imgItem.addEventListener('dragstart', (e) => {
